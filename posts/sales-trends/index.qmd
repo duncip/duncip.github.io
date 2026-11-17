@@ -1,0 +1,23 @@
+---
+title: "Monthly sales trends"
+date: 2026-11-17
+categories: [python, data]
+jupyter: python3
+---
+
+## Query the data
+
+```{python}
+import pandas as pd
+df = pd.read_csv("sales_sample.csv", parse_dates=["month"])
+df.head()
+```
+
+## Plot it
+
+```{python}
+#| label: fig-sales
+#| fig-cap: "Revenue by month"
+import plotly.express as px
+px.line(df, x="month", y="revenue")
+```
