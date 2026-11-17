@@ -6,12 +6,10 @@ website:
   site-url: https://duncip.github.io # you must change this appropriately for RSS feeds to work properly
   title: "Duncan's Blog"
   navbar:
-    right:
+    left:
+      - href: index.qmd
+        text: Blog
       - about.qmd
-      - icon: github
-        href: https://github.com/
-      - icon: bluesky
-        href: https://bsky.app/
 format:
   html:
     theme:
