@@ -13,12 +13,14 @@ website:
 format:
   html:
     theme:
-      - cosmo
-      - brand
+      - flatly
     css: styles.css
     code-fold: true      # code is collapsible, but still on the page
     code-tools: true     # "view source" and copy buttons
     toc: true
+
+execute:
+  freeze: auto
 
 
 
