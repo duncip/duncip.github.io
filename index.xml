@@ -160,5 +160,1350 @@ Figure&nbsp;1: Revenue by month
   <guid>https://duncip.github.io/posts/sales-trends/</guid>
   <pubDate>Tue, 17 Nov 2026 00:00:00 GMT</pubDate>
 </item>
+<item>
+  <title>Broadway continues to rise</title>
+  <link>https://duncip.github.io/posts/broadway-continues-to-rise/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="query-the-data" class="level2">
+<h2 class="anchored" data-anchor-id="query-the-data">Query the data</h2>
+<p>Week 18 of TidyTuesday datasets focuses on <a href="https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-04-28/readme.md">Broadway</a> and provides us with 4 separate datasets:</p>
+<ul>
+<li><p><strong>grosses</strong> which has the main bulk of the overall data, including weekly gross, show name, theatre name and average ticket price</p></li>
+<li><p><strong>synopses</strong> which shows the synopsis of the shows - going to forget about this for the sake of this article</p></li>
+<li><p><strong>cpi</strong> which shows consumer price index - we can use this to adjust our money figures for inflation</p></li>
+<li><p><strong>pre_1985_starts</strong> which lists the shows that started before 1985</p></li>
+</ul>
+<p>The main dataset I’m interested in is <strong>grosses</strong> so let’s see what’s in there:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">glimpse</span>(grosses_raw)</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows: 47,524
+Columns: 14
+$ week_ending          &lt;date&gt; 1985-06-09, 1985-06-09, 1985-06-09, 1985-06-09, …
+$ week_number          &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1…
+$ weekly_gross_overall &lt;dbl&gt; 3915937, 3915937, 3915937, 3915937, 3915937, 3915…
+$ show                 &lt;chr&gt; "42nd Street", "A Chorus Line", "Aren't We All?",…
+$ theatre              &lt;chr&gt; "St. James Theatre", "Sam S. Shubert Theatre", "B…
+$ weekly_gross         &lt;dbl&gt; 282368, 222584, 249272, 95688, 61059, 255386, 306…
+$ potential_gross      &lt;dbl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ avg_ticket_price     &lt;dbl&gt; 30.42, 27.25, 33.75, 20.87, 20.78, 31.96, 28.33, …
+$ top_ticket_price     &lt;dbl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ seats_sold           &lt;dbl&gt; 9281, 8167, 7386, 4586, 2938, 7992, 10831, 5672, …
+$ seats_in_theatre     &lt;dbl&gt; 1655, 1472, 1088, 682, 684, 1018, 1336, 1368, 148…
+$ pct_capacity         &lt;dbl&gt; 0.7010, 0.6935, 0.8486, 0.8405, 0.5369, 0.9813, 1…
+$ performances         &lt;dbl&gt; 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 0, 8, 8…
+$ previews             &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0…</code></pre>
+</div>
+</div>
+<p>There’s a lot of great data in there - I want to create a few things including a patchwork that gives us a quick look into how Broadway shows have performed over the last 35 years, a dashboard (mainly because I’ve been wanting to try flexdashboard and tidymetrics!) and a quick race bar chart (though I don’t think this’ll be great.)</p>
+</section>
+<section id="cleaning-the-data" class="level2">
+<h2 class="anchored" data-anchor-id="cleaning-the-data">Cleaning the data</h2>
+<p>For me, the main columns of interest are <em>week_ending</em>, <em>weekly_gross</em>, <em>weekly_gross_overall</em>, <em>avg_ticket_price</em>, <em>seats_sold</em>, <em>pct_capacity</em> and we’ll have to use <em>performances</em> and <em>previews</em> to clean up the data. I also want to use the tidymetrics package to add in some additional date columns like quarters, years, and would like a rolling average (not sure how long yet). To do that we need to rename the column <em>week_ending</em> to date and then use <em>cross_by_periods</em>. Before adding in any additional columns I want to clean the data though so let’s:</p>
+<ul>
+<li><p>Rename <em>week_ending</em> to date</p></li>
+<li><p>Make sure there are no 0’s in any of the numerical columns as this will affect our average</p></li>
+<li><p>Account for inflation (I’m going to cut off the data at the end of 2019 so will use last week of 2019)</p></li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1">grosses <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> grosses_raw <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb3-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">rename</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">date =</span> week_ending) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb3-3">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate_at</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">vars</span>(weekly_gross<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span>pct_capacity),</span>
+<span id="cb3-4">            <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">~</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ifelse</span>(performances <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span> previews <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span> <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">|</span> . <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>, <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">NA</span>, .))</span>
+<span id="cb3-5"></span>
+<span id="cb3-6"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># quick check to see how many NAs there are now</span></span>
+<span id="cb3-7"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">str</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">map</span>(grosses, <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">~</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">sum</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">is.na</span>(.))))</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>List of 14
+ $ date                : int 0
+ $ week_number         : int 0
+ $ weekly_gross_overall: int 0
+ $ show                : int 0
+ $ theatre             : int 0
+ $ weekly_gross        : int 125
+ $ potential_gross     : int 12613
+ $ avg_ticket_price    : int 125
+ $ top_ticket_price    : int 11414
+ $ seats_sold          : int 125
+ $ seats_in_theatre    : int 88
+ $ pct_capacity        : int 133
+ $ performances        : int 0
+ $ previews            : int 0</code></pre>
+</div>
+</div>
+<p>With the easy bits done, we need to account for inflation. This requires a few steps: dividing all the CPIs by the picked date (December 2019), converting weekly dates in <strong>grosses</strong> to monthly so we can merge the two together, mutate all of the columns in <strong>grosses</strong> that use dollars to be updated with the inflation rate.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1">cpi <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> cpi_raw <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb5-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">dec_2019_dollars =</span> cpi[year_month <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"2019-12-01"</span>] <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span> cpi)</span>
+<span id="cb5-3"></span>
+<span id="cb5-4">grosses_clean <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> grosses <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb5-5">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">year</span>(date) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&gt;</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1985</span> <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&amp;</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">year</span>(date) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&lt;</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2020</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb5-6">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">year_month =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">floor_date</span>(date, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">unit =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"month"</span>)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span> </span>
+<span id="cb5-7">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">left_join</span>(cpi, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">by =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"year_month"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span> </span>
+<span id="cb5-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate_at</span>(</span>
+<span id="cb5-9">    <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">vars</span>(</span>
+<span id="cb5-10">      weekly_gross_overall,</span>
+<span id="cb5-11">      weekly_gross,</span>
+<span id="cb5-12">      potential_gross,</span>
+<span id="cb5-13">      avg_ticket_price,</span>
+<span id="cb5-14">      top_ticket_price</span>
+<span id="cb5-15">    ),</span>
+<span id="cb5-16">    <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">~</span> . <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span> dec_2019_dollars</span>
+<span id="cb5-17">  ) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb5-18">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">select</span>(<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span>potential_gross, <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span>top_ticket_price, <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">c</span>(year_month<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:</span>dec_2019_dollars)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb5-19">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">year =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">year</span>(date))</span></code></pre></div></div>
+</details>
+</div>
+</section>
+<section id="exploring" class="level2">
+<h2 class="anchored" data-anchor-id="exploring">Exploring</h2>
+<p>Now that we’ve done the initial data setup it’d be interesting to look at a few things. In particular I’d like to see:</p>
+<ul>
+<li><p>How my favourite shows have performed over the years (Lion King &amp; Phantom)</p></li>
+<li><p>Has Broadway become more popular? In terms of both number of plays and attendance</p></li>
+<li><p>What’s the price increase like (have adjusted for inflation above)</p></li>
+<li><p>How’s the annual gross revenue?</p></li>
+</ul>
+<p><img src="https://duncip.github.io/../images/patchwork_f.png" class="img-fluid" alt="collection of graphs displaying broadway metrics over time"> As mentioned before there are four metrics that can help us assess the popularity of Broadway shows over the last 35 years. Starting with the top-left plot there’s been a clear year-on-year growth with a peak happening in 2018. A few reasons for the decrease in growth in 2019 include Bruce Springsteen’s concert closed in 2018 and shows like Anastasia brought in a lot less money (44m to 9m for Anastaria). We’d expect revenue to go up as number of performances goes up but the fill shows that’s not necessarily the case. 2008, for example, had a lot of performances but that growth wasn’t reflected in revenue.</p>
+<p>The top-right chart, seats sold, shows the average has gone up considerably. Can see a clear shift beginning in 2015 which is when Hamilton opened and as both Hamilton and Book of Mormon have been consistently sold out since the start of their run, it’s pushing number of seats sold up. It’s also interesting that The Lion King, despite it’s long run, is still consistently selling out 96-97% of its capacity.</p>
+<p>The bottom left chart looks at the range of average ticket prices for shows throughout the years and Hamilton’s high prices (as shown further down in the post) are pushing up the averages. Most of the outliers belong to Hamilton and Book of Mormon, both of which charge much higher than average prices (and have crazy top prices!). The bottom right is a simple plot showing the number of unique shows has risen each year, showing there’s been an expansion throughout the years to accommodate all of these.</p>
+<p>Just to emphasise that more performances generally mean more money.. but not always (as in 2008):</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ggplot</span>(performances_and_shows, <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> yearly_gross,</span>
+<span id="cb6-2">                                   <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> number_of_performances)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb6-3">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_point</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span> </span>
+<span id="cb6-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">labs</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"# of shows"</span>,</span>
+<span id="cb6-5">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"yearly revenue"</span>,</span>
+<span id="cb6-6">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"More performances, more money?"</span>)</span></code></pre></div></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="https://duncip.github.io/posts/broadway-continues-to-rise/index_files/figure-html/perf_rev-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="specific-shows" class="level2">
+<h2 class="anchored" data-anchor-id="specific-shows">Specific shows</h2>
+<p>After looking more into what made Broadway grow over time I found that the top10 shows were contributing a lot to the overall growth. This is especially true for Hamilton and Book of Mormon, two shows that have driven up the average ticket price for shows and have also set a gold standard for selling out consistently! I wanted to create a quick dashboard with flexdashboard so the graphs below will be reflected in that. You can find the dashboard here: <a href="https://www.duncanpastoors.com/broadway_dash.html">link to dashboard</a></p>
+<p>Going to start with adding in the periods and rolling averages using tidymetrics to see if it’ll give us some good insights. As shown by <a href="http://varianceexplained.org/">David Robinson</a> in a previous tidy tuesday (think it was on beer!) we can use both <code>cross_by_dimensions</code> which will add an ‘All’ to our data (in this case in our <em>show</em> column) and <code>cross_by_periods</code> where we can determine what periods to add into the data and what kind of window to summarise them by:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1">top_shows <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> grosses_clean <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">group_by</span>(show) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-3">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">summarise</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">total_gross =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">sum</span>(weekly_gross, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">na.rm =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">arrange</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">desc</span>(total_gross)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-5">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ungroup</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-6">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">head</span>(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">10</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-7">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">select</span>(show) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">pull</span>()</span>
+<span id="cb7-9"></span>
+<span id="cb7-10">grosses_summarised <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> grosses_clean <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(show <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%in%</span> top_shows) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-12">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">cross_by_dimensions</span>(show) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-13">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">cross_by_periods</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">c</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"month"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"quarter"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"year"</span>),</span>
+<span id="cb7-14">                   <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">windows =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">28</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span> </span>
+<span id="cb7-15">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">summarise</span>(</span>
+<span id="cb7-16">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">usd_gross =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">sum</span>(weekly_gross, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">na.rm =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>),</span>
+<span id="cb7-17">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">avg_ticket_price =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mean</span>(avg_ticket_price, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">na.rm =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>),</span>
+<span id="cb7-18">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">nb_seats_sold =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">sum</span>(seats_sold, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">na.rm =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>),</span>
+<span id="cb7-19">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">pct_capacity =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mean</span>(pct_capacity, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">na.rm =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>)</span>
+<span id="cb7-20">  ) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-21">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ungroup</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb7-22">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">year =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">year</span>(date))</span></code></pre></div></div>
+</details>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1">grosses_summarised <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb8-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(period <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"quarter"</span>,</span>
+<span id="cb8-3">         show <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">!=</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"All"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb8-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">show =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">fct_reorder</span>(show, avg_ticket_price)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb8-5">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ggplot</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> avg_ticket_price,</span>
+<span id="cb8-6">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> show,</span>
+<span id="cb8-7">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fill =</span> show)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb8-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_density_ridges</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">scale =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">4</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">alpha =</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.7</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb8-9">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_fill_igv</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb8-10">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">guides</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fill =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"none"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb8-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">labs</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Average ticket price"</span>, </span>
+<span id="cb8-12">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Show"</span>,</span>
+<span id="cb8-13">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Distribution of ticket prices for top 10 Broadway shows"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb8-14">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">theme</span>(</span>
+<span id="cb8-15">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.title =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">hjust =</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1.5</span>)</span>
+<span id="cb8-16">  )</span></code></pre></div></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="https://duncip.github.io/posts/broadway-continues-to-rise/index_files/figure-html/sp_ticket_price-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Hamilton is by far the most expensive show on average which explains why it’s already in the top 10 highest grossing theatres despite only opening in 2015. I’m guessing it’s also going to have one of the highest attendance rates so we’ll have a look at that after visualising total gross (which I already calculated above!):</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1">grosses_summarised <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb9-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(show <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">!=</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"All"</span>,</span>
+<span id="cb9-3">         period <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"year"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span> </span>
+<span id="cb9-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">show =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">fct_reorder</span>(show, usd_gross)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span> </span>
+<span id="cb9-5">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ggplot</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> date,</span>
+<span id="cb9-6">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> usd_gross,</span>
+<span id="cb9-7">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fill =</span> show)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_col</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-9">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">coord_flip</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-10">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_fill_igv</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_x_date</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">date_breaks =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"5 years"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">date_labels =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"%Y"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-12">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_y_continuous</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">labels =</span> scales<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">::</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">dollar_format</span>()) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-13">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">theme</span>(</span>
+<span id="cb9-14">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.text =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">rel</span>(<span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.8</span>)),</span>
+<span id="cb9-15">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.title =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb9-16">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.position =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"bottom"</span></span>
+<span id="cb9-17">  ) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb9-18">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">labs</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">NULL</span>,</span>
+<span id="cb9-19">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">NULL</span>,</span>
+<span id="cb9-20">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Total revenue by Broadway show"</span>)</span></code></pre></div></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="https://duncip.github.io/posts/broadway-continues-to-rise/index_files/figure-html/sp_revenue-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>It’s very obvious here the astronominal amounts Hamilton is bringing in. It slowly pops up in its first year but then continuously grows until 2019 where it slightly starts dropping off. Now that we have a stacked bar plot it also becomes clear where certain shows dropped off like Cats, which closed in 2000 despite still pulling in lots of money. It also had a reboot in 2016/2017 where people flocked to see it! The Book of Mormon is another relatively new show which has been massively successful and just like Hamilton, has a very high price tag.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1">grosses_summarised <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb10-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(period <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"quarter"</span>,</span>
+<span id="cb10-3">         show <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">!=</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"All"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb10-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ggplot</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> date,</span>
+<span id="cb10-5">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> pct_capacity,</span>
+<span id="cb10-6">             <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">colour =</span> show)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-7">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_line</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_y_continuous</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">labels =</span> scales<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">::</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">percent_format</span>()) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-9">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">expand_limits</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-10">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_color_igv</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">labs</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">""</span>,</span>
+<span id="cb10-12">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"seats sold"</span>,</span>
+<span id="cb10-13">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Average % of sold seats per show"</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb10-14">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">theme</span>(</span>
+<span id="cb10-15">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.text =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">rel</span>(<span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.8</span>)),</span>
+<span id="cb10-16">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.title =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb10-17">    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.position =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"bottom"</span></span>
+<span id="cb10-18">  )</span></code></pre></div></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="https://duncip.github.io/posts/broadway-continues-to-rise/index_files/figure-html/sp_seats_sold-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Quite hard to interpret in a static plot with 10 data points but three things stand out immediately: 1) Hamilton consistently has above 100% seat capacity, 2) Book of Mormon has the same, and has been selling out since it started its run, 3) The Lion King has a surprisingly varying attendance rate. That said, out of all the long running shows, it still manages to sell out most of the time.</p>
+<p>Now that we have our main graphs I’ll add them to flexdashboard and add a few score cards to show overall aggregations of the main metrics used. Lastly I wanted to add a quick bar chart race for top 10 shows throughout the years. I didn’t think it would turn out great (it didn’t) but the method might be interesting:</p>
+</section>
+<section id="bar-chart-race" class="level1">
+<h1>Bar chart race</h1>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1">show_yearly_gross <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> grosses_clean <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">select</span>(date, show, weekly_gross) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-3">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">year =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">year</span>(date)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-4">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">group_by</span>(year, show) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-5">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">yearly_gross =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">sum</span>(weekly_gross)) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-6">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ungroup</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-7">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">distinct</span>(year, show, yearly_gross)</span>
+<span id="cb11-8"></span>
+<span id="cb11-9">yearly_top10_shows_rev <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> show_yearly_gross <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-10">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">group_by</span>(year) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mutate</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">rank =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">rank</span>(<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span>yearly_gross),</span>
+<span id="cb11-12">         <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">Value_rel =</span> yearly_gross<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span>yearly_gross[rank<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>], </span>
+<span id="cb11-13">         <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">Value_lbl =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">paste0</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">" "</span>, <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">round</span>(yearly_gross<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1e7</span>))) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-14">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">group_by</span>(show) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-15">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">filter</span>(rank <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&lt;=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">10</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">%&gt;%</span></span>
+<span id="cb11-16">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ungroup</span>()</span></code></pre></div></div>
+</details>
+</div>
+<p>We now have all the data we need to set up a static plot for every single year:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1">shows_static <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">&lt;-</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">ggplot</span>(yearly_top10_shows_rev,</span>
+<span id="cb12-2">       <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">x =</span> rank,</span>
+<span id="cb12-3">           <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">group =</span> show,</span>
+<span id="cb12-4">           <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fill =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">as.factor</span>(show),</span>
+<span id="cb12-5">           <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">colour =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">as.factor</span>(show))) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-6">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_tile</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> yearly_gross <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>,</span>
+<span id="cb12-7">                <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">height =</span> yearly_gross,</span>
+<span id="cb12-8">                <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">width =</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.9</span>), <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">alpha =</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.8</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">colour =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">NA</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-9">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">geom_text</span>(<span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">aes</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">y =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">label =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">paste</span>(show, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">" "</span>)),</span>
+<span id="cb12-10">            <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">vjust =</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.2</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">hjust =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-11">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">coord_flip</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">clip =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"off"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">expand =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">FALSE</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-12">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_y_continuous</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">labels =</span> scales<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">::</span>comma) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-13">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">scale_x_reverse</span>() <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-14">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">guides</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">color =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">FALSE</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fill =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">FALSE</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb12-15">    <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">theme</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.line=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-16">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.text.x=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-17">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.text.y=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-18">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.ticks=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-19">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.title.x=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-20">           <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">axis.title.y=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-21">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">legend.position=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"none"</span>,</span>
+<span id="cb12-22">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.background=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-23">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.border=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-24">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.grid.major=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-25">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.grid.minor=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-26">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.grid.major.x =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_line</span>( <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size=</span>.<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">color=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"grey"</span> ),</span>
+<span id="cb12-27">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">panel.grid.minor.x =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_line</span>( <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size=</span>.<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">color=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"grey"</span> ),</span>
+<span id="cb12-28">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.title=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size=</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">25</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">hjust=</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.5</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">face=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"bold"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">colour=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"grey"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">vjust=</span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>),</span>
+<span id="cb12-29">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.subtitle=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size=</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">18</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">hjust=</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.5</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">face=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"italic"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">color=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"grey"</span>),</span>
+<span id="cb12-30">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.caption =</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_text</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">size=</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">8</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">hjust=</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.5</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">face=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"italic"</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">color=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"grey"</span>),</span>
+<span id="cb12-31">          <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.background=</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">element_blank</span>(),</span>
+<span id="cb12-32">         <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">plot.margin =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">margin</span>(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>,<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">4</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"cm"</span>))</span></code></pre></div></div>
+</details>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13" style="background: #f1f3f5;"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1">shows_static <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb13-2">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">transition_time</span>(year)</span>
+<span id="cb13-3"></span>
+<span id="cb13-4"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">library</span>(gifski)</span>
+<span id="cb13-5">anim <span class="ot" style="color: #003B4F;
+background-color: null;
+font-style: inherit;">=</span> shows_static <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span> </span>
+<span id="cb13-6">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">transition_states</span>(year,</span>
+<span id="cb13-7">                    <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">transition_length =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">8</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">state_length =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">68</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb13-8">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">view_follow</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fixed_x =</span> <span class="cn" style="color: #8f5902;
+background-color: null;
+font-style: inherit;">TRUE</span>) <span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span></span>
+<span id="cb13-9">  <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">labs</span>(<span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">title =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Revenue per year : {closest_state}"</span>,</span>
+<span id="cb13-10">       <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">subtitle =</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Top 10 Shows"</span>)</span>
+<span id="cb13-11"></span>
+<span id="cb13-12"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">animate</span>(anim, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">300</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">fps =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">20</span>,  <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">width =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1200</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">height =</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1000</span>, <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">renderer =</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">gifski_renderer</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"yearly_top10_shows_br.gif"</span>))</span></code></pre></div></div>
+</details>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://duncip.github.io/../images/yearly_top10_shows_br.gif" class="img-fluid figure-img"></p>
+<figcaption>barchart race of highest grossing shows</figcaption>
+</figure>
+</div>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
+<p>I really liked this TidyTuesday dataset, there’s a lot of data to play with. My main takeaway from all this:</p>
+<ul>
+<li><p>I need to go see Hamilton and Book of Mormon - it’s incredible how they have both managed to ‘change the game’. The fact that their average seat price is so high and they are still constantly over capacity shows that the hype around these shows isn’t dying down</p></li>
+<li><p>The Lion King and Wicked are both still doing very well. Wicked especially is impressive to me due to its very long run!</p></li>
+<li><p>Tidymetrics is incredible - it makes it so much easier to quickly aggregate metrics</p></li>
+<li><p>It’s really easy to set up a flexdashboard and I’ll definitely be using lots more of Patchwork in the future</p></li>
+</ul>
+<p>All of the code can be found in the <a href="https://github.com/duncip/blog-posts">blog section</a> on my GitHub</p>
+
+
+<!-- -->
+
+</section>
+</section>
+
+ ]]></description>
+  <category>r</category>
+  <category>data</category>
+  <guid>https://duncip.github.io/posts/broadway-continues-to-rise/</guid>
+  <pubDate>Sat, 09 May 2020 23:00:00 GMT</pubDate>
+</item>
 </channel>
 </rss>
