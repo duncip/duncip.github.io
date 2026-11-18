@@ -12,30 +12,6 @@
 <generator>quarto-1.11.9</generator>
 <lastBuildDate>Tue, 17 Nov 2026 00:00:00 GMT</lastBuildDate>
 <item>
-  <title>Post With Code</title>
-  <dc:creator>Harlow Malloc</dc:creator>
-  <link>https://duncip.github.io/posts/post-with-code/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<p>This is a post with executable code.</p>
-
-
-<!-- -->
-
-
- ]]></description>
-  <category>news</category>
-  <category>code</category>
-  <category>analysis</category>
-  <guid>https://duncip.github.io/posts/post-with-code/</guid>
-  <pubDate>Tue, 17 Nov 2026 00:00:00 GMT</pubDate>
-  <media:content url="https://duncip.github.io/posts/post-with-code/image.jpg" medium="image" type="image/jpeg" height="96" width="144"/>
-</item>
-<item>
   <title>Monthly sales trends</title>
   <link>https://duncip.github.io/posts/sales-trends/</link>
   <description><![CDATA[ 
@@ -183,29 +159,6 @@ Figure&nbsp;1: Revenue by month
   <category>data</category>
   <guid>https://duncip.github.io/posts/sales-trends/</guid>
   <pubDate>Tue, 17 Nov 2026 00:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>Welcome To My Blog</title>
-  <dc:creator>Tristan O&#39;Malley</dc:creator>
-  <link>https://duncip.github.io/posts/welcome/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<p>This is the first post in a Quarto blog. Welcome!</p>
-<p><img src="https://duncip.github.io/posts/welcome/thumbnail.jpg" class="img-fluid"></p>
-<p>Since this post doesn’t specify an explicit <code>image</code>, the first image in the post will be used in the listing page of posts.</p>
-
-
-<!-- -->
-
-
- ]]></description>
-  <category>news</category>
-  <guid>https://duncip.github.io/posts/welcome/</guid>
-  <pubDate>Sat, 14 Nov 2026 00:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>
