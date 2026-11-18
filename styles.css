@@ -1,1 +1,6 @@
 /* css styles */
+
+/* Hide the page title on pages with body-classes: hide-title */
+.hide-title #title-block-header {
+  display: none;
+}
